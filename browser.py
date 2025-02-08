@@ -32,6 +32,7 @@ class Layout:
         self.cursor_y = VSTEP
         self.weight = "normal"
         self.style = "roman"
+        self.size = 12
 
         for tok in tokens:
             self.token(tok)
@@ -48,6 +49,14 @@ class Layout:
             self.weight = "bold"
         elif tok.tag == "/b":
             self.weight = "normal"
+        elif tok.tag == "small":
+            self.size -= 2
+        elif tok.tag == "/small":
+            self.size += 2
+        elif tok.tag == "big":
+            self.size += 4
+        elif tok.tag == "/big":
+            self.size -= 4
 
     def word(self, word):
         font = tkinter.font.Font(
