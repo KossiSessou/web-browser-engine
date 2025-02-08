@@ -3,25 +3,122 @@ import tkinter.font
 import ssl
 import socket
 
-WIDTH, HEIGHT = 800, 600  # Size of the srcreen
 
-SCROLL_STEP = 100
+class URL:
+    def __init__(self, url):
+        self.scheme, url = url.split("://", 1)
+        assert self.scheme in ["http", "https"]
 
-HSTEP, VSTEP = 13, 18
+        if self.scheme == "http":
+            self.port = 80
+        elif self.scheme == "https":
+            self.port = 443
+
+        if "/"not in url:
+            url += "/"
+        self.host, url = url.split("/", 1)
+        self.path = "/" + url
+
+# Requesting a website
+
+    def request(self):
+
+        s = socket.socket(family=socket.AF_INET,
+                          type=socket.SOCK_STREAM,
+                          proto=socket.IPPROTO_TCP,)
+        s.connect((self.host, self.port))
+        if self.scheme == "https":
+            ctx = ssl.create_default_context()
+            s = ctx.wrap_socket(s, server_hostname=self.host)
+
+        request = "GET {} HTTP/1.0\r\n".format(self.path)
+        request += "Host: {}\r\n".format(self.host)
+        request += "\r\n"
+        s.send(request.encode("utf8"))
+        response = s.makefile("r", encoding="utf8", newline="\r\n")
+        statusline = response.readline()
+        version, status, explanation = statusline.split(" ", 2)
+
+        response_headers = {}
+        while True:
+            line = response.readline()
+            if line == "\r\n":
+                break
+            header, value = line.split(":", 1)
+            response_headers[header.casefold()] = value.strip()
+
+        assert "transfer-encoding" not in response_headers
+        assert "content-encoding" not in response_headers
+
+        content = response.read()
+        s.close()
+        return content
 
 
 class Text:
     """This class is used to create a text object to be added to the `out` list in the `lex` function."""
 
-    def __init__(self, text):
+    def __init__(self, text, parent):
         self.text = text
+        self.children = []
+        self.parent = parent
 
 
-class Tag:
+class Element:
     """This class is used to create a text object to be added to the `out` list in the `lex` function."""
 
-    def __init__(self, tag):
+    def __init__(self, tag, parent):
         self.tag = tag
+        self.children = []
+        self.parent = parent
+
+
+class HTMLParser:
+    def __init__(self, body):
+        self.body = body
+        self.unfinished = []
+
+    def parse(self):
+        """
+        This function creates a list of output that contains the address of the tags and texts of the html body
+
+        Parameters:
+        body (): The HTML body content
+
+        Returns:
+        out: The list of html content as either a Tag or a Text object
+        """
+        text = ""
+        in_tag = False
+
+        for c in self.body:
+            if c == "<":
+                in_tag = True
+                if text:
+                    self.add_text(text)
+                text = ""
+            elif c == ">":
+                in_tag = False
+                self.add_tag(text)
+                text = ""
+            else:
+                text += c
+        if not in_tag and text:
+            self.add_text(text)
+        return self.finish()
+
+    def add_text(self, text):
+        parent = self.unfinished[-1]
+        node = Text(text, parent)
+        parent.children.append(node)
+
+    def add_tag(self, tag):
+        if tag.startswith("/"):
+            pass
+        else:
+            parent = self.unfinished[-1]
+            node = Element(tag, parent)
+            self.unfinished.append(node)
 
 
 FONTS = {}
@@ -34,6 +131,11 @@ def get_font(size, weight, style):
         label = tkinter.Label(font=font)
         FONTS[key] = (font, label)
     return FONTS[key][0]
+
+
+WIDTH, HEIGHT = 800, 600  # Size of the srcreen
+
+HSTEP, VSTEP = 13, 18
 
 
 class Layout:
@@ -106,6 +208,9 @@ class Layout:
         self.line = []
 
 
+SCROLL_STEP = 100
+
+
 class Browser:
     def __init__(self):
         self.window = tkinter.Tk()
@@ -140,88 +245,6 @@ class Browser:
                 continue
             self.canvas.create_text(
                 x, y-self.scroll, text=c, anchor='nw', font=font)
-
-
-class URL:
-    def __init__(self, url):
-        self.scheme, url = url.split("://", 1)
-        assert self.scheme in ["http", "https"]
-
-        if self.scheme == "http":
-            self.port = 80
-        elif self.scheme == "https":
-            self.port = 443
-
-        if "/"not in url:
-            url += "/"
-        self.host, url = url.split("/", 1)
-        self.path = "/" + url
-
-# Requesting a website
-
-    def request(self):
-
-        s = socket.socket(family=socket.AF_INET,
-                          type=socket.SOCK_STREAM,
-                          proto=socket.IPPROTO_TCP,)
-        s.connect((self.host, self.port))
-        if self.scheme == "https":
-            ctx = ssl.create_default_context()
-            s = ctx.wrap_socket(s, server_hostname=self.host)
-
-        request = "GET {} HTTP/1.0\r\n".format(self.path)
-        request += "Host: {}\r\n".format(self.host)
-        request += "\r\n"
-        s.send(request.encode("utf8"))
-        response = s.makefile("r", encoding="utf8", newline="\r\n")
-        statusline = response.readline()
-        version, status, explanation = statusline.split(" ", 2)
-
-        response_headers = {}
-        while True:
-            line = response.readline()
-            if line == "\r\n":
-                break
-            header, value = line.split(":", 1)
-            response_headers[header.casefold()] = value.strip()
-
-        assert "transfer-encoding" not in response_headers
-        assert "content-encoding" not in response_headers
-
-        content = response.read()
-        s.close()
-        return content
-
-
-def lex(body):
-    """
-    This function creates a list of output that contains the address of the tags and texts of the html body
-
-    Parameters:
-    body (): The HTML body content
-
-    Returns:
-    out: The list of html content as either a Tag or a Text object
-    """
-    out = []
-    buffer = ""
-    in_tag = False
-
-    for c in body:
-        if c == "<":
-            in_tag = True
-            if buffer:
-                out.append(Text(buffer))
-            buffer = ""
-        elif c == ">":
-            in_tag = False
-            out.append(Tag(buffer))
-            buffer = ""
-        else:
-            buffer += c
-    if not in_tag and buffer:
-        out.append(Text(buffer))
-    return out
 
 
 if __name__ == "__main__":
