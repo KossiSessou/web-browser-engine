@@ -11,20 +11,14 @@ HSTEP, VSTEP = 13, 18
 
 
 class Text:
-    """
-   This class is used to create text object to be added in the `out`
-   list in the function `lex`
-   """
+    """This class is used to create a text object to be added to the `out` list in the `lex` function."""
 
     def __init__(self, text):
         self.text = text
 
 
 class Tag:
-    """
-  This class is used to create text object to be added in the `out`
-  list in the function `lex`
-  """
+    """This class is used to create a text object to be added to the `out` list in the `lex` function."""
 
     def __init__(self, tag):
         self.tag = tag
@@ -32,12 +26,7 @@ class Tag:
 
 class Layout:
 
-
-"""
-This class create a Layout object
-"""
-
-   def __init__(self, tokens):
+    def __init__(self, tokens):
         self.display_list = []
         self.cursor_x = HSTEP
         self.cursor_y = VSTEP
@@ -60,8 +49,6 @@ This class create a Layout object
         elif tok.tag == "/b":
             self.weight = "normal"
 
-        return self.display_list
-
     def word(self, word):
         font = tkinter.font.Font(
             size=16,
@@ -70,7 +57,7 @@ This class create a Layout object
         )
         w = font.measure(word)
         self.display_list.append(
-            (self.cursor_x,  self.cursor_y,  self.word,  font))
+            (self.cursor_x,  self.cursor_y, word, font))
         self.cursor_x += w + font.measure(" ")
         if self.cursor_x + w >= WIDTH - HSTEP:
             self.cursor_y += font.metrics("linespace") * 1.25
@@ -95,7 +82,9 @@ class Browser:
 
     def load(self, url):
         body = url.request()
-        tokens = lex(body)
+        tokens = lex(body)  # tokens is a list of tag and text objects
+        # create a layout object initialized with tokens and access
+        # the display_list fields
         self.display_list = Layout(tokens).display_list
         self.draw()
 
@@ -165,7 +154,7 @@ class URL:
 def lex(body):
     """
     This function creates a list of output that contains the address of the tags and texts of the html body
-    
+
     Parameters:
     body (): The HTML body content
 
