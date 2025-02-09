@@ -63,6 +63,9 @@ class Text:
         self.children = []
         self.parent = parent
 
+    def __repr__(self):
+        return repr(self.text)
+
 
 class Element:
     """This class is used to create a text object to be added to the `out` list in the `lex` function."""
@@ -71,6 +74,9 @@ class Element:
         self.tag = tag
         self.children = []
         self.parent = parent
+
+    def __repr__(self):
+        return "<" + self.tag + ">"
 
 
 class HTMLParser:
@@ -114,11 +120,29 @@ class HTMLParser:
 
     def add_tag(self, tag):
         if tag.startswith("/"):
-            pass
-        else:
+            if len(self.unfinished) == 1:
+                return
+            node = self.unfinished.pop()
             parent = self.unfinished[-1]
+            parent.children.append(node)
+
+        else:
+            parent = self.unfinished[-1] if self.unfinished else None
             node = Element(tag, parent)
             self.unfinished.append(node)
+
+    def finish(self):
+        while len(self.unfinished) > 1:
+            node = self.unfinished.pop()
+            parent = self.unfinished[-1]
+            parent.children.append(node)
+        return self.unfinished.pop()
+
+
+def print_tree(node, indent=0):
+    print(" "*indent, node)
+    for child in node.children:
+        print_tree(child, indent + 2)
 
 
 FONTS = {}
@@ -249,5 +273,8 @@ class Browser:
 
 if __name__ == "__main__":
     import sys
-    Browser().load(URL(sys.argv[1]))
-    tkinter.mainloop()
+    body = URL(sys.argv[1]).request()
+    nodes = HTMLParser(body).parse()
+    print_tree(nodes, 0)
+    # Browser().load(URL(sys.argv[1]))
+    # tkinter.mainloop()
