@@ -80,6 +80,11 @@ class Element:
 
 
 class HTMLParser:
+    SELF_CLOSING_TAGS = [
+        "area", "base", "br", "col", "embed", "hr", "img", "input",
+        "link", "meta", "param", "source", "track", "wbr",
+    ]
+
     def __init__(self, body):
         self.body = body
         self.unfinished = []
@@ -114,11 +119,15 @@ class HTMLParser:
         return self.finish()
 
     def add_text(self, text):
+        if text.isspace():
+            return
         parent = self.unfinished[-1]
         node = Text(text, parent)
         parent.children.append(node)
 
     def add_tag(self, tag):
+        if tag.startswith("!"):
+            return
         if tag.startswith("/"):
             if len(self.unfinished) == 1:
                 return
@@ -126,6 +135,10 @@ class HTMLParser:
             parent = self.unfinished[-1]
             parent.children.append(node)
 
+        elif tag in self.SELF_CLOSING_TAGS:
+            parent = self.unfinished[-1]
+            node = Element(tag, parent)
+            parent.children.append(node)
         else:
             parent = self.unfinished[-1] if self.unfinished else None
             node = Element(tag, parent)
