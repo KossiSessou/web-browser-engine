@@ -70,8 +70,9 @@ class Text:
 class Element:
     """This class is used to create a text object to be added to the `out` list in the `lex` function."""
 
-    def __init__(self, tag, parent):
+    def __init__(self, tag, attributes, parent):
         self.tag = tag
+        self.attributes = attributes
         self.children = []
         self.parent = parent
 
@@ -126,9 +127,10 @@ class HTMLParser:
         parent.children.append(node)
 
     def add_tag(self, tag):
+        tag, attributes = self.get_attributes(tag)
         if tag.startswith("!"):
             return
-        if tag.startswith("/"):
+        elif tag.startswith("/"):
             if len(self.unfinished) == 1:
                 return
             node = self.unfinished.pop()
@@ -137,11 +139,11 @@ class HTMLParser:
 
         elif tag in self.SELF_CLOSING_TAGS:
             parent = self.unfinished[-1]
-            node = Element(tag, parent)
+            node = Element(tag, attributes, parent)
             parent.children.append(node)
         else:
             parent = self.unfinished[-1] if self.unfinished else None
-            node = Element(tag, parent)
+            node = Element(tag, attributes, parent)
             self.unfinished.append(node)
 
     def finish(self):
@@ -150,6 +152,20 @@ class HTMLParser:
             parent = self.unfinished[-1]
             parent.children.append(node)
         return self.unfinished.pop()
+
+    def get_attributes(self, text):
+        parts = text.split()
+        tag = parts[0].casefold()
+        attributes = {}
+        for attrpair in parts[1:]:
+            if "=" in attrpair:
+                key, value = attrpair.split("=", 1)
+                attributes[key.casefold()] = value
+                if len(value) > 2 and value[0] in ["'", "\""]:
+                    value = value[1:-1]
+            else:
+                attributes[attrpair.casefold()] = ""
+        return tag, attributes
 
 
 def print_tree(node, indent=0):
