@@ -81,6 +81,11 @@ class Element:
 
 
 class HTMLParser:
+
+    HEAD_TAGS = [
+        "base", "basefont", "bgsound", "noscript",
+        "link", "meta", "title", "style", "script",
+    ]
     SELF_CLOSING_TAGS = [
         "area", "base", "br", "col", "embed", "hr", "img", "input",
         "link", "meta", "param", "source", "track", "wbr",
@@ -122,6 +127,7 @@ class HTMLParser:
     def add_text(self, text):
         if text.isspace():
             return
+        self.implicit_tags(None)
         parent = self.unfinished[-1]
         node = Text(text, parent)
         parent.children.append(node)
@@ -130,7 +136,9 @@ class HTMLParser:
         tag, attributes = self.get_attributes(tag)
         if tag.startswith("!"):
             return
-        elif tag.startswith("/"):
+
+        self.implicit_tags(tag)
+        if tag.startswith("/"):
             if len(self.unfinished) == 1:
                 return
             node = self.unfinished.pop()
@@ -147,6 +155,8 @@ class HTMLParser:
             self.unfinished.append(node)
 
     def finish(self):
+        if not self.unfinished:
+            self.implicit_tags(None)
         while len(self.unfinished) > 1:
             node = self.unfinished.pop()
             parent = self.unfinished[-1]
@@ -166,6 +176,23 @@ class HTMLParser:
             else:
                 attributes[attrpair.casefold()] = ""
         return tag, attributes
+
+    def implicit_tags(self, tag):
+        while True:
+            open_tags = [node.tag for node in self.unfinished]
+            if open_tags == [] and tag != "html":
+                self.add_tag("html")
+            elif (open_tags == ["html"] and
+                    tag not in ["head", "body", "/html"]):
+                if tag in self.HEAD_TAGS:
+                    self.add_tag("head")
+                else:
+                    self.add_tag("body")
+            elif (open_tags == ["html", "head"] and
+                    tag not in ["/head"] + self.HEAD_TAGS):
+                self.add_tag("/head")
+            else:
+                break
 
 
 def print_tree(node, indent=0):
@@ -192,6 +219,8 @@ HSTEP, VSTEP = 13, 18
 
 
 class Layout:
+    """ Get the position and font of a word and add it
+        to a list to be drawn on the screen by Browser.draw() """
 
     def __init__(self, tokens):
         self.display_list = []
@@ -202,33 +231,42 @@ class Layout:
         self.size = 12
         self.line = []
 
-        for tok in tokens:
-            self.token(tok)
+        self.recurse(tokens)
         self.flush()
 
-    def token(self, tok):
-        if isinstance(tok, Text):
-            for word in tok.text.split():
+    def recurse(self, tree):
+
+        if isinstance(tree, Text):
+            for word in tree.text.split():
                 self.word(word)
-        elif tok.tag == "i":
+        else:
+            self.open_tag(tree.tag)
+            for child in tree.children:
+                self.recurse(child)
+            self.close_tag(tree.tag)
+
+    def open_tag(self, tag):
+        if tag == "i":
             self.style = "italic"
-        elif tok.tag == "/i":
-            self.style = "roman"
-        elif tok.tag == "b":
+        elif tag == "b":
             self.weight = "bold"
-        elif tok.tag == "/b":
-            self.weight = "normal"
-        elif tok.tag == "small":
+        elif tag == "small":
             self.size -= 2
-        elif tok.tag == "/small":
-            self.size += 2
-        elif tok.tag == "big":
+        elif tag == "big":
             self.size += 4
-        elif tok.tag == "/big":
-            self.size -= 4
-        elif tok.tag == "br":
+        elif tag == "br":
             self.flush()
-        elif tok.tag == "/p":
+
+    def close_tag(self, tag):
+        if tag == "i":
+            self.style = "roman"
+        elif tag == "b":
+            self.weight = "normal"
+        elif tag == "small":
+            self.size += 2
+        elif tag == "big":
+            self.size -= 4
+        elif tag == "p":
             self.flush()
             self.cursor_y += VSTEP
 
@@ -240,8 +278,6 @@ class Layout:
         self.cursor_x += w + font.measure(" ")
         if self.cursor_x + w > WIDTH - HSTEP:
             self.flush()
-            # self.cursor_y += font.metrics("linespace") * 1.25
-            # self.cursor_x = HSTEP
 
     def flush(self):
         if not self.line:
@@ -265,6 +301,7 @@ SCROLL_STEP = 100
 
 
 class Browser:
+
     def __init__(self):
         self.window = tkinter.Tk()
         self.canvas = tkinter.Canvas(self.window,
@@ -282,10 +319,10 @@ class Browser:
 
     def load(self, url):
         body = url.request()
-        tokens = lex(body)  # tokens is a list of tag and text objects
+        self.nodes = HTMLParser(body).parse()
         # create a layout object initialized with tokens and access
         # the display_list fields
-        self.display_list = Layout(tokens).display_list
+        self.display_list = Layout(self.nodes).display_list
         self.draw()
 
     def draw(self):
@@ -302,8 +339,8 @@ class Browser:
 
 if __name__ == "__main__":
     import sys
-    body = URL(sys.argv[1]).request()
-    nodes = HTMLParser(body).parse()
-    print_tree(nodes, 0)
-    # Browser().load(URL(sys.argv[1]))
-    # tkinter.mainloop()
+    # body = URL(sys.argv[1]).request()
+    # nodes = HTMLParser(body).parse()
+    # print_tree(nodes, 0)
+    Browser().load(URL(sys.argv[1]))
+    tkinter.mainloop()
